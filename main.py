@@ -1,13 +1,19 @@
+import time
 import requests, json
-from binance.spot import Spot as Client
+from binance.client import Client
 import configure
 import hmac
 import hashlib
-
 from itertools import count
-import time
+from binance.enums import *
 
-poloniexStocks = requests.get('https://api2.binance.com/api/v3/ticker/price').json()
+poloniexStocksResponse = requests.get('https://api.poloniex.com/markets/price').json()
+
+poloniexStocks = {
+        poloniexStocksResponse[i]['symbol']: poloniexStocksResponse[i]['price'] for i in
+        range(0, len(poloniexStocksResponse))
+}
+
 
 binaceStocksResponse = requests.get('https://api2.binance.com/api/v3/ticker/price').json()
 
@@ -29,23 +35,41 @@ params = {
     "price": 9500,
 }
 
-def makeBiOrder():
-    #https://api2.binance.com/api/v3/order
-    client = Client(configure.biKey, configure.biSecret, base_url="https://api2.binance.com/api/v3/order")
-    response = client.new_order(**params)
+client = Client(configure.biKey, configure.biSecret)
+def makeBiBuyOrder(coin, buyPower):
+    buyPayLoad = client.create_order(
+        symbol=nS(coin),
+        side=SIDE_BUY,
+        type=ORDER_TYPE_MARKET,
+        quantity=round(buyPower, 2),
+    )
+    return buyPayLoad
+
+def biWithdraw(coin):
+    accountData = client.get_account()["balances"]
+    coinAmount = {
+        accountData[i]['asset']: accountData[i]['free'] for i in
+        range(0, len(accountData))
+    }[coin]
+    response = client.withdraw(
+        coin=coin,
+        address=configure.polyDepositAddress,
+        amount=coinAmount
+    )
     return response
 
-def biWithdraw():
-    spot_client = Client(configure.keyS, configure.secretS, show_header=True, base_url="https://api2.binance.com/sapi/v1/capital/withdraw/apply")
-    return spot_client.withdraw(coin="BNB", amount=0.01, address=configure.with_draw)
-
 def is_profitable_after_fee(buy, sell, marketFee):
-    expected_profit_raw = get_adjusted_prices(marketFee(float(buy)))[1] - get_adjusted_prices(float(sell))[0],
+    finalBuyPrice = get_adjusted_prices(marketFee(float(buy)))[1],
+    finalSellPrice = get_adjusted_prices(float(sell))[0]
+
+    expected_profit_raw = finalBuyPrice[0] - finalSellPrice,
     expected_profit = expected_profit_raw[0]
 
+    procentDifference = str((abs(finalBuyPrice[0] - finalSellPrice) / ((finalBuyPrice[0] + finalSellPrice)/2.0)) * 100) + "%"
+
     if expected_profit > 0.0:
-        return True, expected_profit,
-    return False, expected_profit,
+        return True, expected_profit, procentDifference,
+    return False, expected_profit, procentDifference,
 
 def binance_fee(price):
     fee = 0.155
@@ -79,8 +103,8 @@ def get_adjusted_prices(price):
 
 def nS(name):
     spiltName = name.split('_')
-    currency = '{}'.format(spiltName[1])
-    crypto = '{}'.format(spiltName[0])
+    currency = '{}'.format(spiltName[0])
+    crypto = '{}'.format(spiltName[1])
     return currency + crypto
 
 
@@ -126,6 +150,28 @@ def getPolyData(payload):
 
     return response3
 
+def polySellOrder(coin, amount):
+    splitCoinName = coin.split("_")
+    newCoinName = splitCoinName[1] +"_"+ splitCoinName[0]
+    buyPayLoad = {
+        'command': 'sell',
+        'currencyPair': newCoinName,
+        'rate': '10.0',
+        'amount': round(amount, 2),
+        'clientOrderId': str(time.time())
+    }
+    return getPolyData(buyPayLoad).json()
+
+def polyWithdraw(coin):
+    maxAmount = getPolyData(accountPayLoad).json()["exchange"][coin]["available"]
+    withdrawPayLoad = {
+        'command': 'withdraw',
+        'currency': coin,
+        'amount': maxAmount,
+        'address': configure.biDepositAddress
+    }
+    return getPolyData(withdrawPayLoad).json()
+
 
 accountPayLoad = {'command': 'returnCompleteBalances',
                'account': 'all'}
@@ -135,65 +181,8 @@ withdrawPayLoad = {'command': 'withdraw',
                'amount': '1',
                'address': '0x84a90e21d9d02e30ddcea56d618aa75ba90331ff'}
 
-buyPayLoad = {'command': 'buy',
-               'currencyPair': 'USDT_AAVE',
-               'rate': '1.00',
-               'amount': '1',
-               'clientOrderId': '12345'}
-
-sellPayLoad = {'command': 'sell',
-               'currencyPair': 'USDT_AAVE',
-               'rate': '10.0',
-               'amount': '1',
-               'clientOrderId': '12345'}
 
 something = False
-
-
-
-
-
-
-
-
-
-
-NONCE_COUNTER = count(int(time.time() * 1000))
-base_uri = "https://fapi.binance.com/fapi/v1/order?"
-API_Key = configure.biKey
-Secret_Key = configure.biSecret
-symbol = "XRPUSDT"
-side = "BUY"
-type = "MARKET"
-timeInForce = "GTC"
-quantity = 20
-recvWindow = 5000
-timestamp = next(NONCE_COUNTER)
-queryString = "symbol=" + symbol + "&side=" + side + "type=" + type + "&timeInForce=" + timeInForce
-signature = hmac.new(configure.biSecret, b'' + bytes(queryString.encode('utf8')), hashlib.sha512)
-
-Payload = {
-    'Quantity': str(quantity),
-    'RecvWindow': str(recvWindow),
-    'Timestamp': str(timestamp),
-    'Signature': str(signature),
-}
-
-headers = {
-    'X-MBX-APIKEY': configure.biKey,
-}
-
-request = requests.Request(
-        'POST', base_uri,
-        data=Payload, headers=headers)
-
-response3 = requests.post(
-        base_uri,
-        data=Payload, headers=headers, auth=BodyDigestSignature(configure.biSecret)
-)
-
-print(response3.content)
-
 
 while True:
     something2 = False
@@ -204,18 +193,25 @@ while True:
     listOfProfitableCoins = []
 
     for coin in configure.cryptoCoins:
-        coinBuy = binaceStocks[nS(coin)]
-        coinSell = binaceStocks[nS('USDT_AAVE')]
+        coinBuy = poloniexStocks[coin]
+        coinSell = binaceStocks[nS(coin)]
 
         is_profitable = is_profitable_after_fee(coinBuy, coinSell, poloniex_fee)
         if (coin == configure.cryptoCoins[len(configure.cryptoCoins) - 1]):
             if (something2):
                 something = True
-                print(listOfProfitableCoins)
+                bestCoin = listOfProfitableCoins[0]
+                bestCoinName = bestCoin[0].split("_")[0]
+                polyBuyPower = getPolyData(accountPayLoad).json()["exchange"]["USDT"]["available"]
+                maxAmount = float(polyBuyPower) / float(poloniexStocks[bestCoin[0]])
 
-
+                print("buying", bestCoin)
+                print(makeBiBuyOrder(bestCoin[0], maxAmount))
+                print(biWithdraw(bestCoinName))
+                print(polySellOrder(bestCoin[0], maxAmount))
+                print(polyWithdraw(bestCoinName))
+                print("done")
 
         if is_profitable[0]:
             something2 = True
-            listOfProfitableCoins.insert(len(listOfProfitableCoins) - 1, [coin, is_profitable[1]])
-            print(coin, is_profitable[1], (binaceStocks[nS(coin)]), binaceStocks[nS(coin)])
+            listOfProfitableCoins.insert(len(listOfProfitableCoins) - 1, [coin, is_profitable[2]])
