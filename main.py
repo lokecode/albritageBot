@@ -36,6 +36,27 @@ params = {
 }
 
 client = Client(configure.biKey, configure.biSecret)
+
+def cryptoCoins():
+    binaceStocksResponse = client.get_ticker()
+
+    binaceStocks = {
+        binaceStocksResponse[i]['symbol']: binaceStocksResponse[i] for i in
+        range(0, len(binaceStocksResponse))
+    }
+
+    listOfCoins = []
+    for coin in poloniexStocksResponse:
+        coinSpilt = str(coin["symbol"]).split("_")
+        formattedCoin = coinSpilt[0] + coinSpilt[1]
+        try:
+            if coinSpilt[1] == "USDT":
+                if float(binaceStocks[formattedCoin]["volume"]) >= configure.minVolume:
+                    listOfCoins.insert(len(listOfCoins) - 1, coin["symbol"])
+        except:
+            pass
+
+    return listOfCoins
 def makeBiBuyOrder(coin, buyPower):
     buyPayLoad = client.create_order(
         symbol=nS(coin),
@@ -184,6 +205,8 @@ withdrawPayLoad = {'command': 'withdraw',
 
 something = False
 
+
+
 while True:
     something2 = False
     if (something):
@@ -192,7 +215,7 @@ while True:
 
     listOfProfitableCoins = []
 
-    for coin in configure.cryptoCoins:
+    for coin in cryptoCoins():
         coinBuy = poloniexStocks[coin]
         coinSell = binaceStocks[nS(coin)]
 
