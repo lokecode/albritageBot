@@ -1,11 +1,15 @@
 import time
 import requests, json
+from time import sleep
 from binance.client import Client
 import configure
 import hmac
 import hashlib
 from itertools import count
 from binance.enums import *
+from selenium import webdriver
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
 poloniexStocksResponse = requests.get('https://api.poloniex.com/markets/price').json()
 
@@ -37,7 +41,55 @@ params = {
 
 client = Client(configure.biKey, configure.biSecret)
 
-def cryptoCoins():
+cryptoCoinList = ['ETC_USDT', 'DOGE_USDT', 'TRX_USDT', 'WIN_USDT', 'SNX_USDT', 'MATIC_USDT', 'JST_USDT', 'STEEM_USDT', 'LINK_USDT', 'DOT_USDT', 'SUSHI_USDT', 'UNI_USDT', 'SAND_USDT', 'TUSD_USDT', 'SHIB_USDT', 'SOL_USDT', 'ADA_USDT', 'XRP_USDT']
+
+
+def polyVolume(coin):
+    currencyName = str(requests.get("https://api.poloniex.com/currencies/" + coin).json()[coin]["name"]).lower().replace(" ", "-")
+
+    options = webdriver.FirefoxOptions()
+    options.headless = True
+
+    driver = webdriver.Firefox(options=options)
+
+    url = "https://coinmarketcap.com/currencies/" + currencyName + "/markets/"
+
+    driver.get(url)
+    currentUrl = driver.current_url
+    sleep(1)
+    if currentUrl != url:
+        driver.get(str(currentUrl) + "markets/")
+        sleep(1)
+    driver.execute_script("window.scrollTo(0, 2400);")
+    sleep(2)
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight - 2000);")
+
+    doc = BeautifulSoup(driver.page_source, "html.parser")
+    trList = doc.find_all("tr")
+
+    driver.quit()
+
+    coinVolume = 0
+
+    for item in trList:
+        try:
+            tdList = item.find_all("td")
+            exchangeName = str(tdList[1]).split('href="/exchanges/')[1].split('/">')[0]
+            if exchangeName == "poloniex":
+                currencyPair = str(tdList[2]).split('target="_blank">')[1].split('</')[0].split('/')[1]
+                if currencyPair == "USDT":
+                    volume = str(tdList[6].find("p").text).replace(',', '').replace('$', '')
+                    coinVolume = int(round(float(volume), 0))
+        except:
+            pass
+
+    return coinVolume
+
+def generateCryptoCoinList():
+    client = Client("LaAua2cA28nbcP5PDscvDEvffx3SOh1YHak2IctIhvY6bZffNg1MTXCl8P9iVexD", "lJqV4QzpkPuvD5B3ACxVgYhmyRGvzaRSFpeQoolXqQououIn0vTltB5IzzTs5rT7")
+
+    cryptoCoinList.clear()
+
     binaceStocksResponse = client.get_ticker()
 
     binaceStocks = {
@@ -45,18 +97,24 @@ def cryptoCoins():
         range(0, len(binaceStocksResponse))
     }
 
-    listOfCoins = []
+    poloniexStocksResponse = requests.get('https://api.poloniex.com/markets/price').json()
+
+
     for coin in poloniexStocksResponse:
         coinSpilt = str(coin["symbol"]).split("_")
         formattedCoin = coinSpilt[0] + coinSpilt[1]
         try:
             if coinSpilt[1] == "USDT":
-                if float(binaceStocks[formattedCoin]["volume"]) >= configure.minVolume:
-                    listOfCoins.insert(len(listOfCoins) - 1, coin["symbol"])
+                if float(binaceStocks[formattedCoin]["volume"]) >= configure.minBiVolume:
+                    polyVolumeValue = float(polyVolume(coinSpilt[0]))
+                    print(polyVolumeValue, cryptoCoinList)
+                    if polyVolumeValue >= configure.minPolyVolume:
+                        cryptoCoinList.insert(len(cryptoCoinList) - 1, coin["symbol"])
+                        print(polyVolumeValue, cryptoCoinList)
         except:
             pass
 
-    return listOfCoins
+    return cryptoCoinList
 def makeBiBuyOrder(coin, buyPower):
     buyPayLoad = client.create_order(
         symbol=nS(coin),
@@ -206,21 +264,29 @@ withdrawPayLoad = {'command': 'withdraw',
 something = False
 
 
+nine_hours_from_now = '{:%H:%M}'.format((datetime.now()))
 
 while True:
+    sleep(1)
     something2 = False
     if (something):
-        time.sleep(10)
+        time.sleep(1)
         something = False
+
+    currentTime = '{:%H:%M}'.format((datetime.now()))
+    if nine_hours_from_now == currentTime:
+        nine_hours_from_now = '{:%H:%M}'.format((datetime.now() + timedelta(hours=1)))
+        generateCryptoCoinList()
 
     listOfProfitableCoins = []
 
-    for coin in cryptoCoins():
+    for coin in cryptoCoinList:
         coinBuy = poloniexStocks[coin]
         coinSell = binaceStocks[nS(coin)]
 
         is_profitable = is_profitable_after_fee(coinBuy, coinSell, poloniex_fee)
-        if (coin == configure.cryptoCoins[len(configure.cryptoCoins) - 1]):
+        print(is_profitable)
+        if (coin == cryptoCoinList[len(cryptoCoinList) - 1]):
             if (something2):
                 something = True
                 bestCoin = listOfProfitableCoins[0]
