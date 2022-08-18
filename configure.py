@@ -10,4 +10,5 @@ biDepositAddress = 'adress'
 
 #global
 slippage = 1
-minVolume = 1000000
+minBiVolume = 1000000
+minPolyVolume = 10000
