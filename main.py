@@ -41,7 +41,7 @@ params = {
 
 client = Client(configure.biKey, configure.biSecret)
 
-cryptoCoinList = ['ETC_USDT', 'DOGE_USDT', 'TRX_USDT', 'WIN_USDT', 'SNX_USDT', 'MATIC_USDT', 'JST_USDT', 'STEEM_USDT', 'LINK_USDT', 'DOT_USDT', 'SUSHI_USDT', 'UNI_USDT', 'SAND_USDT', 'TUSD_USDT', 'SHIB_USDT', 'SOL_USDT', 'ADA_USDT', 'XRP_USDT']
+cryptoCoinList = []
 
 
 def polyVolume(coin):
