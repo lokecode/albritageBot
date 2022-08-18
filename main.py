@@ -11,21 +11,6 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
-poloniexStocksResponse = requests.get('https://api.poloniex.com/markets/price').json()
-
-poloniexStocks = {
-        poloniexStocksResponse[i]['symbol']: poloniexStocksResponse[i]['price'] for i in
-        range(0, len(poloniexStocksResponse))
-}
-
-
-binaceStocksResponse = requests.get('https://api2.binance.com/api/v3/ticker/price').json()
-
-binaceStocks = {
-        binaceStocksResponse[i]['symbol']: binaceStocksResponse[i]['price'] for i in
-        range(0, len(binaceStocksResponse))
-}
-
 slippage = 1.0
 
 #bi
@@ -268,6 +253,20 @@ nine_hours_from_now = '{:%H:%M}'.format((datetime.now()))
 
 while True:
     sleep(1)
+    poloniexStocksResponse = requests.get('https://api.poloniex.com/markets/price').json()
+
+    poloniexStocks = {
+        poloniexStocksResponse[i]['symbol']: poloniexStocksResponse[i]['price'] for i in
+        range(0, len(poloniexStocksResponse))
+    }
+
+    binaceStocksResponse = requests.get('https://api2.binance.com/api/v3/ticker/price').json()
+
+    binaceStocks = {
+        binaceStocksResponse[i]['symbol']: binaceStocksResponse[i]['price'] for i in
+        range(0, len(binaceStocksResponse))
+    }
+
     something2 = False
     if (something):
         time.sleep(1)
